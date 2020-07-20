@@ -27,6 +27,15 @@ typedef struct pcl_s			// Job data
 } pcl_t;
 
 
+typedef struct pcl_device_s   // PCL device
+{
+  char  *device_id,   // IEEE-1284 Device ID
+        *device_uri,  // Device URI
+        *name;        // Queue Name
+  bool  online;       // Is the device online?
+} pcl_device_t;
+
+
 //
 // Local globals...
 //
@@ -87,6 +96,7 @@ static const char * const pcl_hp_laserjet_media[] =
 // Local functions...
 //
 
+static char   *get_driver_cb(char *device_id);
 static bool   pcl_callback(pappl_system_t *system, const char *driver_name, const char *device_uri, pappl_pdriver_data_t *driver_data, ipp_t **driver_attrs, void *data);
 static void   pcl_compress_data(pappl_job_t *job, pappl_device_t *device, unsigned char *line, unsigned length, unsigned plane, unsigned type);
 static void   pcl_identify(pappl_printer_t *printer, pappl_identify_actions_t actions, const char *message);
@@ -102,14 +112,59 @@ static pappl_system_t   *system_cb(int num_options, cups_option_t *options, void
 
 
 //
+// 'get_driver_cb()' - Get driver callback.
+//
+
+static char *                   // O - Driver name or `NULL`
+get_driver_cb(char *device_id)  // I - IEEE-1284 Device ID
+{
+  int           num_values;     // Number of keys and values
+  cups_option_t *values;        // Keys and values
+  const char    *cmd,           // Command set
+                *mdl,           // Model
+                *ptr;           // Pointer into model
+
+
+  if (!device_id)
+    return (NULL);
+
+  num_values = papplDeviceParse1284ID(device_id, &values);
+
+  if ((cmd = cupsGetOption("CMD", num_values, values)) != NULL)
+  {
+    if (strstr(cmd, "PDF") || strstr(cmd, "PS") || strstr(cmd, "URF"))
+      return (NULL);
+
+    if (strstr(cmd, "PCL"))
+    {
+      if ((mdl = cupsGetOption("MDL", num_values, values)) == NULL)
+        mdl = cupsGetOption("MODEL", num_values, values);
+
+      for (ptr = mdl; *ptr; ptr ++)
+      {
+        if (!strncasecmp(ptr, "deskjet", 7))
+          return "hp_deskjet";
+        else if (!strncasecmp(ptr, "generic", 7))
+          return "hp_generic";
+        else if (!strncasecmp(ptr, "laserjet", 8))
+          return "hp_laserjet";
+      }
+    }
+  }
+
+  return (NULL);
+}
+
+
+//
 // 'main()' - Main entry for the hp-printer-app.
 //
 
 int
-main(int  argc,				// I - Number of command-line arguments
-     char *argv[])			// I - Command-line arguments
+main(int  argc,         // I - Number of command-line arguments
+     char *argv[])      // I - Command-line arguments
 {
-  papplMainloop(argc, argv, "1.0", NULL, NULL, NULL, system_cb, "hp_printer_app");
+  papplMainloop(argc, argv, "1.0", NULL, NULL, NULL, system_cb, get_driver_cb, "hp_printer_app");
   return (0);
 }
 

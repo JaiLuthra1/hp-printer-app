@@ -15,6 +15,7 @@ confinement: strict
 apps:
   hp-printer-app:
     command: bin/hp-printer-app
+    daemon: simple
     plugs: [avahi-observe, home, log-observe, network, network-bind, network-manager, raw-usb]
 
 parts:
